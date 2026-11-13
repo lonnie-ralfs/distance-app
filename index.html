@@ -165,14 +165,14 @@
   // Ram / Tundra: EPA combined mpg from fueleconomy.gov (Ram: 2010 model year, Tundra: 2005). "+ trailer" rows are estimates (no official towing mpg exists).
   // rate = rental distance charge in $ per km (0 = none).
   const DEFAULT_VEHICLES = [
-    { id: 'uh-pickup', name: "U-Haul 8' Pickup", mpg: 19, tank: 34, rate: 0 },
-    { id: 'uh-van', name: "U-Haul 9' Cargo Van", mpg: 18, tank: 25, rate: 0 },
-    { id: 'uh-10', name: "U-Haul 10' Truck", mpg: 12, tank: 31, rate: 0 },
-    { id: 'uh-15', name: "U-Haul 15' Truck", mpg: 10, tank: 40, rate: 0 },
-    { id: 'uh-17', name: "U-Haul 17' Truck", mpg: 10, tank: 40, rate: 0 },
-    { id: 'uh-20', name: "U-Haul 20' Truck", mpg: 10, tank: 40, rate: 0 },
-    { id: 'uh-26', name: "U-Haul 26' Truck", mpg: 9, tank: 60, rate: 0 },
-    { id: 'uh-29', name: "U-Haul 29' Truck", mpg: 9, tank: 60, rate: 0 },
+    { id: 'uh-pickup', name: "U-Haul 8' Pickup", mpg: 19, tank: 34, rate: 1.29 },
+    { id: 'uh-van', name: "U-Haul 9' Cargo Van", mpg: 18, tank: 25, rate: 1.29 },
+    { id: 'uh-10', name: "U-Haul 10' Truck", mpg: 12, tank: 31, rate: 1.29 },
+    { id: 'uh-15', name: "U-Haul 15' Truck", mpg: 10, tank: 40, rate: 1.29 },
+    { id: 'uh-17', name: "U-Haul 17' Truck", mpg: 10, tank: 40, rate: 1.29 },
+    { id: 'uh-20', name: "U-Haul 20' Truck", mpg: 10, tank: 40, rate: 1.29 },
+    { id: 'uh-26', name: "U-Haul 26' Truck", mpg: 9, tank: 60, rate: 1.29 },
+    { id: 'uh-29', name: "U-Haul 29' Truck", mpg: 9, tank: 60, rate: 1.29 },
     { id: 'ram10-57', name: '2010 Dodge Ram 1500 5.7L Hemi 2WD', mpg: 16, tank: 26, rate: 0 },
     { id: 'ram10-57-4', name: '2010 Dodge Ram 1500 5.7L Hemi 4WD', mpg: 15, tank: 26, rate: 0 },
     { id: 'ram10-47', name: '2010 Dodge Ram 1500 4.7L V8', mpg: 15, tank: 26, rate: 0 },
@@ -196,8 +196,12 @@
     rest.splice(at < 0 ? rest.length : at, 0, ...structuredClone(rams));
     S.vehicles = rest; S.presetVer = 3;
   }
-  if (S.presetVer !== 3) {   // first run, or presets from an older version: load the current list
-    S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 3;
+  if (S.presetVer === 3) {   // U-Hauls now default to a $1.29/km distance charge; rates the user already set are kept
+    S.vehicles.forEach(v => { if (v.id.startsWith('uh-') && !(v.rate > 0)) v.rate = 1.29; });
+    S.presetVer = 4;
+  }
+  if (S.presetVer !== 4) {   // first run, or presets from an older version: load the current list
+    S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 4;
     if (!S.unit) { S.unit = 'km'; if (S.gasPrice === 3.25) S.gasPrice = 1.5; }
   }
   if (S.showDumps == null) S.showDumps = true;
