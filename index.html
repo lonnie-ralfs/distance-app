@@ -200,9 +200,12 @@
     S.vehicles.forEach(v => { if (v.id.startsWith('uh-') && !(v.rate > 0)) v.rate = 1.29; });
     S.presetVer = 4;
   }
-  if (S.presetVer !== 4) {   // first run, or presets from an older version: load the current list
-    S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 4;
-    if (!S.unit) { S.unit = 'km'; if (S.gasPrice === 3.25) S.gasPrice = 1.5; }
+  if (S.presetVer === 4) {   // gas now defaults to $1.95 per litre
+    S.gasPrice = S.unit === 'mi' ? +(1.95 * L_PER_GAL).toFixed(3) : 1.95; S.presetVer = 5;
+  }
+  if (S.presetVer !== 5) {   // first run, or presets from an older version: load the current list
+    S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 5;
+    if (!S.unit) { S.unit = 'km'; S.gasPrice = 1.95; }
   }
   if (S.showDumps == null) S.showDumps = true;
   if (S.showUhaul == null) S.showUhaul = true;
