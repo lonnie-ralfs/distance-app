@@ -665,7 +665,31 @@
   };
   // Places OpenStreetMap doesn't have yet. Add your own here: kind is 'dump' or 'uhaul'.
   const EXTRA_POIS = [
-    { id: 'x-ellice', kind: 'dump', name: 'Ellice Recycle', addr: '524 David St, Victoria', lat: 48.4376, lng: -123.3746 }
+    { id: 'x-ellice', kind: 'dump', name: 'Ellice Recycle', addr: '524 David St, Victoria', lat: 48.4376, lng: -123.3746 },
+    // Every U-Haul centre and neighborhood dealer on uhaul.com for Victoria, Sidney, Sooke and Duncan (checked Nov 2026)
+    { id: 'x-uh1', kind: 'uhaul', name: 'U-Haul Moving & Storage at Queens Ave', addr: '644 Queens Ave, Victoria', lat: 48.4345, lng: -123.3656 },
+    { id: 'x-uh2', kind: 'uhaul', name: 'U-Haul Moving & Storage of Victoria', addr: '790 Topaz Ave, Victoria', lat: 48.4419, lng: -123.3655 },
+    { id: 'x-uh3', kind: 'uhaul', name: 'U-Haul Moving & Storage of Sidney', addr: '10201 McDonald Park Rd, Sidney', lat: 48.6592, lng: -123.4165 },
+    { id: 'x-uh4', kind: 'uhaul', name: 'James Bay Auto Service', addr: '950 North Park St, Victoria', lat: 48.4302, lng: -123.3564, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh5', kind: 'uhaul', name: 'Little Gem Grocery', addr: '148 Superior St, Victoria', lat: 48.4213, lng: -123.3798, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh6', kind: 'uhaul', name: 'Mega Mart', addr: '456 Gorge Rd E, Victoria', lat: 48.4411, lng: -123.3737, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh7', kind: 'uhaul', name: 'Sunset Market And Floral', addr: '1273 Fairfield Rd, Victoria', lat: 48.4154, lng: -123.3495, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh8', kind: 'uhaul', name: 'Craigflower Foods', addr: '811 Craigflower Rd, Esquimalt', lat: 48.4395, lng: -123.3936, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh9', kind: 'uhaul', name: 'Vicart', addr: '3666 Saanich Rd, Saanich', lat: 48.4574, lng: -123.3695, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh10', kind: 'uhaul', name: 'Sabzi Mandi Supermarket', addr: '306 Burnside Rd W, Saanich', lat: 48.4554, lng: -123.3933, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh11', kind: 'uhaul', name: 'Garrison Grocery', addr: '658 Burnside Rd W, Saanich', lat: 48.4610, lng: -123.4002, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh12', kind: 'uhaul', name: 'Westshore U Lock Mini Storage', addr: '1621 Island Hwy, View Royal', lat: 48.4547, lng: -123.4606, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh13', kind: 'uhaul', name: 'Abbas Xpress Mart', addr: '2155 Sooke Rd, Colwood', lat: 48.4355, lng: -123.4884, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh14', kind: 'uhaul', name: 'Goldstream Market', addr: '976 Goldstream Ave, Langford', lat: 48.4508, lng: -123.5103, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh15', kind: 'uhaul', name: 'Sooke Tools and Equipment Rentals', addr: '6228 Sooke Rd, Sooke', lat: 48.3895, lng: -123.6980, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh16', kind: 'uhaul', name: 'Laughing Llama', addr: '3090 Trans-Canada Hwy, Mill Bay', lat: 48.6684, lng: -123.5607, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh17', kind: 'uhaul', name: 'Xtreme Tire Repair', addr: '3415 Trans-Canada Hwy, Cobble Hill', lat: 48.6825, lng: -123.5728, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh18', kind: 'uhaul', name: 'Mini Mall Storage Cobble Hill', addr: '3825 Trans-Canada Hwy, Cobble Hill', lat: 48.7005, lng: -123.5970, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh19', kind: 'uhaul', name: 'First To Market Sales Force', addr: '290 Park Dr, Salt Spring Island', lat: 48.8572, lng: -123.5060, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh20', kind: 'uhaul', name: 'Cowichan Auto Repair', addr: '5275 Chaster Rd, Duncan', lat: 48.7635, lng: -123.6919, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh21', kind: 'uhaul', name: 'Coronation Market', addr: '607 Coronation Ave, Duncan', lat: 48.7790, lng: -123.6968, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh22', kind: 'uhaul', name: 'Alley Kats Deal Den', addr: '160 Trans-Canada Hwy, Duncan', lat: 48.7749, lng: -123.6984, note: 'U-Haul neighborhood dealer' },
+    { id: 'x-uh23', kind: 'uhaul', name: 'STE Rental', addr: '2956 Boys Rd, Duncan', lat: 48.7701, lng: -123.7007, note: 'U-Haul neighborhood dealer' }
   ];
   const POI = { items: EXTRA_POIS.slice(), box: null, timer: 0, seq: 0, shown: '', gOk: true, busy: 0 };
   function addPoi(p) { if (!POI.items.some(x => x.kind === p.kind && metres(x, p) < (x.name === p.name ? 500 : 150))) POI.items.push(p); }
@@ -675,7 +699,7 @@
   } catch (e) {}
   function poiCard(p) {
     const d = document.createElement('div'); d.className = 'poi';
-    d.innerHTML = `<b>${esc(p.name)}</b>${p.addr ? '<br>' + esc(p.addr) : ''}<br><button>Add as stop</button>`;
+    d.innerHTML = `<b>${esc(p.name)}</b>${p.note ? '<br><i>' + esc(p.note) + '</i>' : ''}${p.addr ? '<br>' + esc(p.addr) : ''}<br><button>Add as stop</button>`;
     d.querySelector('button').onclick = () => { provider.closePopup(); placeStop(-1, { lat: p.lat, lng: p.lng }, p.name + (p.addr ? ', ' + p.addr : '')); };
     return d;
   }
