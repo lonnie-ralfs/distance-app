@@ -48,7 +48,7 @@
   .field select, .field input { width: 100%; }
   .field label, .hint { font-size: 12px; color: var(--muted); }
   .hint { margin: 6px 0 0; }
-  .veh { display: grid; grid-template-columns: 1fr 60px 56px 56px auto; gap: 5px; margin-bottom: 5px; align-items: center; }
+  .veh { display: grid; grid-template-columns: 1fr 54px 46px 50px 56px auto; gap: 5px; margin-bottom: 5px; align-items: center; }
   .veh.head { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
   details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
   details summary { cursor: pointer; color: var(--muted); }
@@ -117,7 +117,7 @@
         <button id="addVeh">+ Add vehicle</button>
         <button class="link" id="resetVeh">Restore defaults</button>
       </div>
-      <p class="hint">U-Haul rows use the fuel figures U-Haul publishes (best case &mdash; expect worse fully loaded). Ram (2010) and Tundra (2005) rows are EPA combined ratings; the &ldquo;+ trailer&rdquo; rows are estimates. The last column is the rental charge per distance driven (the per-km rate on your U-Haul quote) &mdash; leave blank for none. Tank size is optional.</p>
+      <p class="hint">U-Haul rows use the fuel figures U-Haul publishes (best case &mdash; expect worse fully loaded). Ram (2010) and Tundra (2005) rows are EPA combined ratings; the &ldquo;+ trailer&rdquo; rows are estimates. The $/km column is the rental charge per distance driven and Base $ is the flat rental fee (U-Haul&rsquo;s advertised in-town day rate) &mdash; set both from your actual quote, or leave blank for none. Tank size is optional.</p>
     </details>
 
     <div style="margin-top:16px"><button class="primary" id="go">Calculate route</button></div>
@@ -163,16 +163,16 @@
 
   // U-Haul: mpg and tank size as published on uhaul.com (their "ideal conditions" figures; 26'/29' are listed as 8-10 mpg).
   // Ram / Tundra: EPA combined mpg from fueleconomy.gov (Ram: 2010 model year, Tundra: 2005). "+ trailer" rows are estimates (no official towing mpg exists).
-  // rate = rental distance charge in $ per km (0 = none).
+  // rate = rental distance charge in $ per km (0 = none). base = flat rental fee per trip: U-Haul's advertised in-town day rate (the real quote varies by day and location).
   const DEFAULT_VEHICLES = [
-    { id: 'uh-pickup', name: "U-Haul 8' Pickup", mpg: 19, tank: 34, rate: 1.29 },
-    { id: 'uh-van', name: "U-Haul 9' Cargo Van", mpg: 18, tank: 25, rate: 1.29 },
-    { id: 'uh-10', name: "U-Haul 10' Truck", mpg: 12, tank: 31, rate: 1.29 },
-    { id: 'uh-15', name: "U-Haul 15' Truck", mpg: 10, tank: 40, rate: 1.29 },
-    { id: 'uh-17', name: "U-Haul 17' Truck", mpg: 10, tank: 40, rate: 1.29 },
-    { id: 'uh-20', name: "U-Haul 20' Truck", mpg: 10, tank: 40, rate: 1.29 },
-    { id: 'uh-26', name: "U-Haul 26' Truck", mpg: 9, tank: 60, rate: 1.29 },
-    { id: 'uh-29', name: "U-Haul 29' Truck", mpg: 9, tank: 60, rate: 1.29 },
+    { id: 'uh-pickup', name: "U-Haul 8' Pickup", mpg: 19, tank: 34, rate: 1.29, base: 19.95 },
+    { id: 'uh-van', name: "U-Haul 9' Cargo Van", mpg: 18, tank: 25, rate: 1.29, base: 19.95 },
+    { id: 'uh-10', name: "U-Haul 10' Truck", mpg: 12, tank: 31, rate: 1.29, base: 19.95 },
+    { id: 'uh-15', name: "U-Haul 15' Truck", mpg: 10, tank: 40, rate: 1.29, base: 29.95 },
+    { id: 'uh-17', name: "U-Haul 17' Truck", mpg: 10, tank: 40, rate: 1.29, base: 29.95 },
+    { id: 'uh-20', name: "U-Haul 20' Truck", mpg: 10, tank: 40, rate: 1.29, base: 39.95 },
+    { id: 'uh-26', name: "U-Haul 26' Truck", mpg: 9, tank: 60, rate: 1.29, base: 39.95 },
+    { id: 'uh-29', name: "U-Haul 29' Truck", mpg: 9, tank: 60, rate: 1.29, base: 39.95 },
     { id: 'ram10-57', name: '2010 Dodge Ram 1500 5.7L Hemi 2WD', mpg: 16, tank: 26, rate: 0 },
     { id: 'ram10-57-4', name: '2010 Dodge Ram 1500 5.7L Hemi 4WD', mpg: 15, tank: 26, rate: 0 },
     { id: 'ram10-47', name: '2010 Dodge Ram 1500 4.7L V8', mpg: 15, tank: 26, rate: 0 },
@@ -203,8 +203,12 @@
   if (S.presetVer === 4) {   // gas now defaults to $1.95 per litre
     S.gasPrice = S.unit === 'mi' ? +(1.95 * L_PER_GAL).toFixed(3) : 1.95; S.presetVer = 5;
   }
-  if (S.presetVer !== 5) {   // first run, or presets from an older version: load the current list
-    S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 5;
+  if (S.presetVer === 5) {   // U-Hauls now carry their base rental fee
+    S.vehicles.forEach(v => { const d = DEFAULT_VEHICLES.find(x => x.id === v.id); if (d && d.base && !(v.base > 0)) v.base = d.base; });
+    S.presetVer = 6;
+  }
+  if (S.presetVer !== 6) {   // first run, or presets from an older version: load the current list
+    S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 6;
     if (!S.unit) { S.unit = 'km'; S.gasPrice = 1.95; }
   }
   if (S.showDumps == null) S.showDumps = true;
@@ -263,13 +267,14 @@
       `<option value="${esc(v.id)}" ${v.id === S.vehicleId ? 'selected' : ''}>${esc(v.name || 'Unnamed')} — ${econ(v)}</option>`).join('');
   }
   function renderVehList() {
-    $('vehHead').innerHTML = `<span>Name</span><span>${isKm() ? 'L/100km' : 'MPG'}</span><span>Tank ${isKm() ? 'L' : 'gal'}</span><span>$/${isKm() ? 'km' : 'mi'}</span><span></span>`;
+    $('vehHead').innerHTML = `<span>Name</span><span>${isKm() ? 'L/100km' : 'MPG'}</span><span>Tank ${isKm() ? 'L' : 'gal'}</span><span>$/${isKm() ? 'km' : 'mi'}</span><span>Base $</span><span></span>`;
     $('vehList').innerHTML = S.vehicles.map((v, i) => `
       <div class="veh">
         <input data-i="${i}" data-f="name" value="${esc(v.name)}" placeholder="Vehicle name">
         <input data-i="${i}" data-f="mpg" type="number" min="1" step="0.1" value="${v.mpg > 0 ? +(isKm() ? LP100 / v.mpg : v.mpg).toFixed(1) : ''}">
         <input data-i="${i}" data-f="tank" type="number" min="0" step="1" value="${v.tank ? +(isKm() ? v.tank * L_PER_GAL : v.tank).toFixed(1) : ''}" placeholder="—">
         <input data-i="${i}" data-f="rate" type="number" min="0" step="0.01" value="${v.rate ? +(v.rate * (isKm() ? 1 : KM_PER_MI)).toFixed(3) : ''}" placeholder="—">
+        <input data-i="${i}" data-f="base" type="number" min="0" step="0.01" value="${v.base || ''}" placeholder="—">
         <button class="icon" data-i="${i}" title="Delete" ${S.vehicles.length <= 1 ? 'disabled' : ''}>&times;</button>
       </div>`).join('');
   }
@@ -801,18 +806,21 @@
       <div class="card"><div class="k">Fuel needed</div><div class="v">${fmtGal(fuel)} ${VU}</div><div class="s">${esc(fills)}</div></div>
       <div class="card"><div class="k">Fuel cost</div><div class="v">${fmtMoney(cost)}</div><div class="s">${totalM > 0 ? fmtMoney(cost / (totalM / perM)) : '$0.00'} per ${DU} at ${fmtMoney(price)}/${VU}</div></div>` +
       (v.rate > 0 ? `
-      <div class="card"><div class="k">Distance charge</div><div class="v">${fmtMoney(charge)}</div><div class="s">${rateTxt} × ${dist(totalM)} ${DU}</div></div>
-      <div class="card"><div class="k">Fuel + distance charge</div><div class="v">${fmtMoney(cost + charge)}</div><div class="s">excludes rental base fee, insurance, tax</div></div>` : '');
+      <div class="card"><div class="k">Distance charge</div><div class="v">${fmtMoney(charge)}</div><div class="s">${rateTxt} × ${dist(totalM)} ${DU}</div></div>` : '') +
+      (v.base > 0 ? `
+      <div class="card"><div class="k">Base rental fee</div><div class="v">${fmtMoney(v.base)}</div><div class="s">flat fee for the rental</div></div>` : '') +
+      (v.rate > 0 || v.base > 0 ? `
+      <div class="card" style="grid-column: 1 / -1"><div class="k">Trip total</div><div class="v">${fmtMoney(cost + charge + (v.base || 0))}</div><div class="s">fuel${v.rate > 0 ? ' + distance charge' : ''}${v.base > 0 ? ' + base fee' : ''}; excludes insurance, fees and tax</div></div>` : '');
 
     const n = id => `<b>${id}</b>`;
     $('legs').innerHTML = `<tr><th>Leg</th><th>${DU}</th><th>Time</th><th>${VU}</th><th>Fuel</th>${v.rate > 0 ? '<th>Dist. charge</th>' : ''}</tr>` + route.legs.map((l, k) =>
       `<tr><td title="${esc(route.seq[k].addr)} → ${esc(route.seq[k + 1].addr)}">${n(route.seq[k].i + 1)} → ${n(route.seq[k + 1].i + 1)}</td>
         <td>${dist(l.m)}</td><td>${fmtDur(l.s)}</td><td>${fmtGal(vol(l.m, v))}</td><td>${fmtMoney(vol(l.m, v) * price)}</td>${v.rate > 0 ? `<td>${fmtMoney(fee(l.m, v))}</td>` : ''}</tr>`).join('');
 
-    const anyRate = S.vehicles.some(x => x.rate > 0);
+    const anyRate = S.vehicles.some(x => x.rate > 0 || x.base > 0);
     $('compare').innerHTML = `<tr><th>Vehicle</th><th>${km ? 'L/100km' : 'MPG'}</th><th>${VU}</th><th>Fuel</th>${anyRate ? '<th>Total</th>' : ''}</tr>` + S.vehicles.map(x => {
       const f = vol(totalM, x) * price;
-      return `<tr class="${x.id === v.id ? 'sel' : ''}"><td>${esc(x.name || 'Unnamed')}</td><td>${econ(x).split(' ')[0]}</td><td>${fmtGal(vol(totalM, x))}</td><td>${fmtMoney(f)}</td>${anyRate ? `<td>${fmtMoney(f + fee(totalM, x))}</td>` : ''}</tr>`;
+      return `<tr class="${x.id === v.id ? 'sel' : ''}"><td>${esc(x.name || 'Unnamed')}</td><td>${econ(x).split(' ')[0]}</td><td>${fmtGal(vol(totalM, x))}</td><td>${fmtMoney(f)}</td>${anyRate ? `<td>${fmtMoney(f + fee(totalM, x) + (x.base || 0))}</td>` : ''}</tr>`;
     }).join('');
 
     const a = route.seq.map(x => { const g = geoCache[gk(x.addr)]; return g && g.pin ? g.lat + ',' + g.lng : x.addr; });
