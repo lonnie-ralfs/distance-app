@@ -68,6 +68,15 @@
   tr.sel td { font-weight: 700; }
   .pin { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 700 12px system-ui;
     display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .leaflet-marker-draggable .pin { cursor: grab; }
+  .layers { position: absolute; top: 10px; right: 60px; z-index: 1000; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 5px 9px; font-size: 12px; display: flex; gap: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  .layers label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .layers svg { height: 16px; width: auto; display: block; }
+  .layers { align-items: center; }
+  .poi-ic svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+  .poi { font: 13px/1.4 system-ui, sans-serif; color: #1c2530; }
+  .poi button { margin-top: 6px; background: #c2410c; color: #fff; border-color: #c2410c; font-weight: 600; padding: 4px 10px; }
   .ac { position: absolute; z-index: 2000; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     box-shadow: 0 6px 20px rgba(0,0,0,.25); overflow: hidden; }
   .ac div { padding: 7px 10px; cursor: pointer; font-size: 13px; }
@@ -92,6 +101,7 @@
       <button id="addStop">+ Add stop</button>
       <label class="row"><input type="checkbox" id="roundTrip"> Return to start</label>
     </div>
+    <p class="hint">On the map: drag a numbered marker to move that stop, right-click (or long-press) to add a stop, or click a dump or U-Haul icon to add it.</p>
 
     <h2>Vehicle &amp; fuel</h2>
     <div class="row">
@@ -135,7 +145,12 @@
       <label class="row" style="margin-top:8px"><input type="checkbox" id="traffic"> Use live traffic for drive time (Google only)</label>
     </details>
   </div>
-  <div class="mapwrap"><div id="map"></div><div class="provider" id="provider"></div></div>
+  <div class="mapwrap"><div id="map"></div>
+    <div class="layers">
+      <label><input type="checkbox" id="showDumps"><span id="icDump"></span>Dumps</label>
+      <label><input type="checkbox" id="showUhaul"><span id="icUhaul"></span></label>
+      <span id="poiBusy" hidden style="color:var(--muted)">loading&hellip;</span>
+    </div><div class="provider" id="provider"></div></div>
 </div>
 
 <script>
@@ -185,6 +200,8 @@
     S.vehicles = structuredClone(DEFAULT_VEHICLES); S.vehicleId = 'uh-15'; S.presetVer = 3;
     if (!S.unit) { S.unit = 'km'; if (S.gasPrice === 3.25) S.gasPrice = 1.5; }
   }
+  if (S.showDumps == null) S.showDumps = true;
+  if (S.showUhaul == null) S.showUhaul = true;
   const isKm = () => S.unit === 'km';
   const LP100 = 235.215;   // L/100km = 235.215 / mpg(US)
   const econ = v => !(v.mpg > 0) ? '?' : isKm() ? (LP100 / v.mpg).toFixed(1) + ' L/100km' : +v.mpg.toFixed(1) + ' mpg';
@@ -192,6 +209,9 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
   let geoCache = {};
   try { geoCache = JSON.parse(localStorage.getItem(KEY + '.geo') || '{}'); } catch (e) {}
+  const saveGeo = () => { try { localStorage.setItem(KEY + '.geo', JSON.stringify(geoCache)); } catch (e) {} };
+  const gk = a => a.trim().toLowerCase();
+  const metres = (a, b) => Math.hypot((a.lat - b.lat) * 111320, (a.lng - b.lng) * 111320 * Math.cos(a.lat * Math.PI / 180));
   let route = null;      // last computed route
   let stopErrors = {};   // index -> message
 
@@ -320,7 +340,20 @@
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(this.map);
+      this.poiLayer = L.layerGroup().addTo(this.map);
       this.layer = L.layerGroup().addTo(this.map);
+      this.map.on('contextmenu', e => placeStop(-1, { lat: e.latlng.lat, lng: e.latlng.lng }));
+    },
+    bounds() { const b = this.map.getBounds(); return { s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast() }; },
+    onMove(fn) { this.map.on('moveend', fn); },
+    closePopup() { this.map.closePopup(); },
+    drawPois(list) {
+      this.poiLayer.clearLayers();
+      list.forEach(p => {
+        const ic = ICONS[p.kind];
+        L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'poi-ic', html: ic.svg, iconSize: [ic.w, ic.h], iconAnchor: [ic.w / 2, ic.h / 2] }), title: p.name })
+          .bindPopup(() => poiCard(p)).addTo(this.poiLayer);
+      });
     },
     async geocode(addr) {
       const k = addr.trim().toLowerCase();
@@ -359,20 +392,24 @@
       }
       return { points: pts, legs, path };
     },
-    draw(points, path) {
+    draw(points, path, fit) {
       this.layer.clearLayers();
-      const line = L.polyline(path, { color: getComputedStyle(document.documentElement).getPropertyValue('--route').trim(), weight: 5, opacity: .85 }).addTo(this.layer);
-      points.forEach(p => L.marker([p.lat, p.lng], {
-        icon: L.divIcon({ className: '', html: `<div class="pin">${esc(p.label)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }), title: p.title
-      }).addTo(this.layer));
-      this.map.fitBounds(line.getBounds(), { padding: [40, 40] });
+      const line = path.length ? L.polyline(path, { color: getComputedStyle(document.documentElement).getPropertyValue('--route').trim(), weight: 5, opacity: .85 }).addTo(this.layer) : null;
+      points.forEach(p => {
+        const m = L.marker([p.lat, p.lng], {
+          icon: L.divIcon({ className: '', html: `<div class="pin">${esc(p.label)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+          title: p.title + ' (drag to move)', draggable: true, zIndexOffset: 1000
+        }).addTo(this.layer);
+        m.on('dragend', () => { const ll = m.getLatLng(); placeStop(p.i, { lat: ll.lat, lng: ll.lng }); });
+      });
+      if (fit && line) this.map.fitBounds(line.getBounds(), { padding: [40, 40] });
     }
   };
 
   // ---------- Google provider: Maps JavaScript API + Routes API ----------
   const GOOGLE = {
     name: 'Google Maps',
-    map: null, items: [],
+    map: null, items: [], pois: [], info: null,
     async init() {
       window.gm_authFailure = () => setMsg('Google rejected the API key. Check that the key is correct and that Maps JavaScript API is enabled and billing is set up for the project.', 'err');
       await new Promise((res, rej) => {
@@ -380,14 +417,37 @@
         loadScript('https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(S.gkey) + '&v=weekly&loading=async&callback=__gmReady').catch(rej);
       });
       this.map = new google.maps.Map($('map'), { center: { lat: 39.5, lng: -98.35 }, zoom: 4, mapTypeControl: false, streetViewControl: false });
+      this.map.addListener('contextmenu', e => placeStop(-1, { lat: e.latLng.lat(), lng: e.latLng.lng() }));
+    },
+    bounds() {
+      const b = this.map.getBounds(); if (!b) return null;
+      const a = b.getSouthWest(), c = b.getNorthEast();
+      return { s: a.lat(), w: a.lng(), n: c.lat(), e: c.lng() };
+    },
+    onMove(fn) { this.map.addListener('idle', fn); },
+    closePopup() { if (this.info) this.info.close(); },
+    drawPois(list) {
+      this.pois.forEach(o => o.setMap(null)); this.pois = [];
+      this.info = this.info || new google.maps.InfoWindow();
+      list.forEach(p => {
+        const ic = ICONS[p.kind];
+        const m = new google.maps.Marker({
+          map: this.map, position: { lat: p.lat, lng: p.lng }, title: p.name, zIndex: 1,
+          icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(ic.svg), scaledSize: new google.maps.Size(ic.w, ic.h), anchor: new google.maps.Point(ic.w / 2, ic.h / 2) }
+        });
+        m.addListener('click', () => { this.info.setContent(poiCard(p)); this.info.open({ map: this.map, anchor: m }); });
+        this.pois.push(m);
+      });
     },
     async route(addrs, onProgress) {
       const points = [], legs = [], path = [];
+      // stops dropped or dragged on the map route through that exact spot, typed ones by address
+      const wp = a => { const g = geoCache[gk(a)]; return g && g.pin ? { location: { latLng: { latitude: g.lat, longitude: g.lng } } } : { address: a }; };
       for (const c of chunks(addrs)) {
         onProgress('Calculating route…');
         const body = {
-          origin: { address: c[0] }, destination: { address: c[c.length - 1] },
-          intermediates: c.slice(1, -1).map(a => ({ address: a })),
+          origin: wp(c[0]), destination: wp(c[c.length - 1]),
+          intermediates: c.slice(1, -1).map(wp),
           travelMode: 'DRIVE', routingPreference: S.traffic ? 'TRAFFIC_AWARE' : 'TRAFFIC_UNAWARE'
         };
         const r = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
@@ -412,15 +472,20 @@
       }
       return { points, legs, path };
     },
-    draw(points, path) {
+    draw(points, path, fit) {
       this.items.forEach(o => o.setMap(null)); this.items = [];
       const bounds = new google.maps.LatLngBounds();
       const ll = path.map(([lat, lng]) => { const p = { lat, lng }; bounds.extend(p); return p; });
-      this.items.push(new google.maps.Polyline({ map: this.map, path: ll, strokeColor: '#1d4ed8', strokeWeight: 5, strokeOpacity: .85 }));
-      points.forEach(p => this.items.push(new google.maps.Marker({
-        map: this.map, position: { lat: p.lat, lng: p.lng }, title: p.title, label: { text: p.label, color: '#fff', fontWeight: '700' }
-      })));
-      this.map.fitBounds(bounds, 40);
+      if (ll.length) this.items.push(new google.maps.Polyline({ map: this.map, path: ll, strokeColor: '#1d4ed8', strokeWeight: 5, strokeOpacity: .85 }));
+      points.forEach(p => {
+        const m = new google.maps.Marker({
+          map: this.map, position: { lat: p.lat, lng: p.lng }, title: p.title + ' (drag to move)', draggable: true, zIndex: 10,
+          label: { text: p.label, color: '#fff', fontWeight: '700' }
+        });
+        m.addListener('dragend', e => placeStop(p.i, { lat: e.latLng.lat(), lng: e.latLng.lng() }));
+        this.items.push(m);
+      });
+      if (fit && ll.length) this.map.fitBounds(bounds, 40);
     }
   };
 
@@ -528,28 +593,161 @@
   document.querySelector('.side').addEventListener('scroll', acClose);
 
   // ---------- calculate ----------
-  $('go').onclick = async () => {
+  let calcSeq = 0;
+  async function calc(keepView) {
     const used = S.stops.map((s, i) => ({ addr: s.trim(), i })).filter(x => x.addr);
     stopErrors = {};
     if (used.length < 2) { renderStops(); setMsg('Enter at least two addresses.', 'err'); return; }
     const seq = used.slice();
     if (S.roundTrip) seq.push(used[0]);
-    const btn = $('go'); btn.disabled = true;
+    const btn = $('go'), my = ++calcSeq; btn.disabled = true;
     try {
       await ready;
       const r = await provider.route(seq.map(x => x.addr), t => setMsg(t));
+      if (my !== calcSeq) return;   // a newer change replaced this one
       route = { ...r, seq, provider: provider.name };
       // one marker per distinct stop (the round-trip return shares stop 1's marker)
-      const marks = used.map((u, k) => ({ ...r.points[k], label: String(u.i + 1), title: u.addr }));
-      provider.draw(marks, r.path);
+      const marks = used.map((u, k) => ({ ...r.points[k], label: String(u.i + 1), title: u.addr, i: u.i }));
+      provider.draw(marks, r.path, !keepView);
       setMsg('');
     } catch (e) {
+      if (my !== calcSeq) return;
       if (e.stopIndex != null) stopErrors[seq[e.stopIndex].i] = "Couldn't find this address — try adding city and state.";
       setMsg(e.message || String(e), 'err');
     } finally {
-      btn.disabled = false; renderStops(); renderResults();
+      if (my === calcSeq) { btn.disabled = false; renderStops(); renderResults(); }
     }
+  }
+  $('go').onclick = () => calc(false);
+
+  // ---------- editing the route on the map ----------
+  // Remember a spot under a label so the route goes through that exact point.
+  function pinAs(label, pt) {
+    const hit = geoCache[gk(label)];
+    if (hit && metres(hit, pt) > 30) label += ` (${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)})`;   // same name, different place
+    geoCache[gk(label)] = { lat: pt.lat, lng: pt.lng, pin: 1 }; saveGeo();
+    return label;
+  }
+  async function reverseLabel(pt) {   // nearest address for a spot on the map
+    let label = '';
+    try {
+      const wait = OSM.lastGeo + 1100 - Date.now();
+      if (wait > 0) await sleep(wait);
+      OSM.lastGeo = Date.now();
+      const j = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&lat=${pt.lat.toFixed(6)}&lon=${pt.lng.toFixed(6)}`)).json();
+      const a = j.address || {};
+      const street = a.road ? (a.house_number ? a.house_number + ' ' : '') + a.road : '';
+      label = [j.name, street, a.city || a.town || a.village || a.municipality || a.county, a.state]
+        .filter((x, i, arr) => x && arr.indexOf(x) === i).join(', ');
+    } catch (e) {}
+    return label || `${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}`;
+  }
+  let placeSeq = 0;
+  // Put stop i at a point on the map (i = -1: fill the first empty stop, or add one), then redraw the route.
+  async function placeStop(i, pt, name) {
+    const my = ++placeSeq;
+    if (!name) { setMsg('Looking up that spot…'); name = await reverseLabel(pt); }
+    const label = pinAs(name, pt);
+    if (i < 0 || i >= S.stops.length) { i = S.stops.findIndex(x => !x.trim()); if (i < 0) i = S.stops.push('') - 1; }
+    S.stops[i] = label; stopErrors = {}; save(); renderStops();
+    if (my !== placeSeq) return;
+    if (S.stops.filter(x => x.trim()).length >= 2) calc(true);
+    else {   // only one stop so far: just show its marker
+      setMsg('');
+      ready.then(() => provider.draw(S.stops.map((x, k) => ({ ...geoCache[gk(x)], label: String(k + 1), title: x, i: k })).filter(m => m.lat != null), [], false)).catch(() => {});
+    }
+  }
+
+  // ---------- map extras: dumps and U-Haul locations ----------
+  const ICONS = {
+    dump: { w: 28, h: 28, svg: '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><rect x="1" y="1" width="26" height="26" rx="7" fill="#166534" stroke="#fff" stroke-width="2"/><path d="M8 10.5h12M11.5 10.5v-2.3h5v2.3M9.6 10.5l.9 9.8h7l.9-9.8M12.4 13v4.8M15.6 13v4.8" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+    uhaul: { w: 50, h: 20, svg: '<svg xmlns="http://www.w3.org/2000/svg" width="50" height="20" viewBox="0 0 50 20"><rect x="1" y="1" width="48" height="18" rx="4" fill="#f15a22" stroke="#fff" stroke-width="2"/><text x="25" y="13.8" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="10.5" font-weight="900" fill="#fff">U-HAUL</text></svg>' }
   };
+  // Places OpenStreetMap doesn't have yet. Add your own here: kind is 'dump' or 'uhaul'.
+  const EXTRA_POIS = [
+    { id: 'x-ellice', kind: 'dump', name: 'Ellice Recycle', addr: '524 David St, Victoria', lat: 48.4376, lng: -123.3746 }
+  ];
+  const POI = { items: EXTRA_POIS.slice(), box: null, timer: 0, seq: 0, shown: '', gOk: true, busy: 0 };
+  function addPoi(p) { if (!POI.items.some(x => x.kind === p.kind && metres(x, p) < (x.name === p.name ? 500 : 150))) POI.items.push(p); }
+  try {   // places found on earlier visits show straight away (kept for 30 days)
+    const c = JSON.parse(localStorage.getItem(KEY + '.poi') || 'null');
+    if (c && Date.now() - c.t < 30 * 864e5) { c.items.forEach(addPoi); POI.box = c.box; }
+  } catch (e) {}
+  function poiCard(p) {
+    const d = document.createElement('div'); d.className = 'poi';
+    d.innerHTML = `<b>${esc(p.name)}</b>${p.addr ? '<br>' + esc(p.addr) : ''}<br><button>Add as stop</button>`;
+    d.querySelector('button').onclick = () => { provider.closePopup(); placeStop(-1, { lat: p.lat, lng: p.lng }, p.name + (p.addr ? ', ' + p.addr : '')); };
+    return d;
+  }
+  function showPois() {
+    const list = POI.items.filter(p => p.kind === 'dump' ? S.showDumps : S.showUhaul);
+    const sig = list.map(p => p.id).join();
+    if (sig === POI.shown) return;   // nothing new: leave any open popup alone
+    POI.shown = sig; provider.drawPois(list);
+  }
+  function showPoisFrom(got) {
+    for (const f of got.flat()) {
+      if (!f || !f.geometry) continue;
+      const t = f.properties, name = t.name || '';
+      const uh = /u-?haul/i.test(name);
+      const dump = ['landfill', 'waste_transfer_station', 'waste_management'].includes(t.osm_value) || /(^| )(GFL|DL'?s? ?Bins|Ellice Recycle)/i.test(name);
+      if (!name || (!uh && !dump)) continue;
+      addPoi({
+        id: (t.osm_type || '') + t.osm_id, kind: uh ? 'uhaul' : 'dump', name,
+        addr: [[t.housenumber, t.street].filter(Boolean).join(' '), t.city || t.town || t.village || t.district].filter(Boolean).join(', '),
+        lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0]
+      });
+    }
+    showPois();
+  }
+  async function loadPois() {
+    if (!S.showDumps && !S.showUhaul) return;
+    if (POI.busy) { POI.again = true; return; }   // one search at a time: the free server queues extra requests
+    const b = provider.bounds();
+    if (!b || b.n - b.s > 2.5) return;   // zoomed out too far to search
+    const c = POI.box;
+    if (c && b.s >= c.s && b.n <= c.n && b.w >= c.w && b.e <= c.e) return;   // already covered
+    const dy = (b.n - b.s) / 2, dx = (b.e - b.w) / 2;
+    POI.busy = 1; $('poiBusy').hidden = false;
+    const box = { s: b.s - dy, n: b.n + dy, w: b.w - dx, e: b.e + dx };
+    if (S.gkey && POI.gOk && S.showUhaul) {   // with a Google key, Google knows every U-Haul dealer
+      try {
+        const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': S.gkey, 'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location' },
+          body: JSON.stringify({ textQuery: 'U-Haul', pageSize: 20, locationRestriction: { rectangle: { low: { latitude: box.s, longitude: box.w }, high: { latitude: box.n, longitude: box.e } } } })
+        });
+        if (!r.ok) throw new Error(r.status);
+        for (const p of (await r.json()).places || [])
+          if (/u-?haul/i.test(p.displayName.text)) addPoi({ id: 'g' + p.id, kind: 'uhaul', name: p.displayName.text, addr: p.formattedAddress || '', lat: p.location.latitude, lng: p.location.longitude });
+      } catch (e) { POI.gOk = false; }
+    }
+    // free place search (OpenStreetMap data): one quick request per kind of place, limited to this part of the map
+    const bb = [box.w, box.s, box.e, box.n].map(x => x.toFixed(4)).join();
+    const got = [];
+    for (const q of ['U-Haul', 'landfill', 'transfer station', 'waste', 'GFL', 'DL Bins']) {   // one at a time: the service limits bursts
+      try {
+        const r = await fetch(`https://photon.komoot.io/api/?limit=40&lang=en&q=${encodeURIComponent(q)}&bbox=${bb}`, { signal: AbortSignal.timeout(20000) });
+        got.push(r.ok ? (await r.json()).features || [] : null);
+      } catch (e) { got.push(null); }
+      showPoisFrom(got);
+      await sleep(350);
+    }
+    if (got.every(Boolean)) {   // every search answered: this area is covered
+      POI.box = box;
+      try { localStorage.setItem(KEY + '.poi', JSON.stringify({ t: Date.now(), box: POI.box, items: POI.items.filter(x => !x.id.startsWith('x-')) })); } catch (e) {}
+    }
+    POI.busy = 0; $('poiBusy').hidden = true;
+    showPois();
+    if (POI.again) { POI.again = false; queuePois(); }
+  }
+  const queuePois = () => { clearTimeout(POI.timer); POI.timer = setTimeout(loadPois, 700); };
+  $('icDump').innerHTML = ICONS.dump.svg; $('icUhaul').innerHTML = ICONS.uhaul.svg;
+  for (const id of ['showDumps', 'showUhaul']) {
+    $(id).checked = S[id];
+    $(id).onchange = e => { S[id] = e.target.checked; save(); ready.then(() => { showPois(); loadPois(); }).catch(() => {}); };
+  }
+  ready.then(() => { showPois(); provider.onMove(queuePois); queuePois(); }).catch(() => {});
 
   // ---------- results ----------
   function renderResults() {
@@ -586,7 +784,7 @@
       return `<tr class="${x.id === v.id ? 'sel' : ''}"><td>${esc(x.name || 'Unnamed')}</td><td>${econ(x).split(' ')[0]}</td><td>${fmtGal(vol(totalM, x))}</td><td>${fmtMoney(f)}</td>${anyRate ? `<td>${fmtMoney(f + fee(totalM, x))}</td>` : ''}</tr>`;
     }).join('');
 
-    const a = route.seq.map(x => x.addr);
+    const a = route.seq.map(x => { const g = geoCache[gk(x.addr)]; return g && g.pin ? g.lat + ',' + g.lng : x.addr; });
     if (a.length <= 11) {
       const u = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=' + encodeURIComponent(a[0]) +
         '&destination=' + encodeURIComponent(a[a.length - 1]) +
